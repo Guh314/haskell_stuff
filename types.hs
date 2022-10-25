@@ -169,3 +169,113 @@ occurs' x (Leaf y)              = x == y
 occurs' x (Node l y r) | x == y = True
                        | x < y  = occurs' x l
                        | x > y  = occurs' x r
+
+
+
+-- Class Declaration
+
+
+
+-- Eq class
+--class Eq a where
+--    (==), (/=) :: a -> a -> Bool
+--
+--    x /= y = not (x == y)
+--
+--instance Eq Bool where
+--    False == False = True
+--    True  == True  = True
+--    _     == _     = False
+--
+--
+---- Ord' class extended from Eq'
+--class Eq a => Ord a where
+--    (<), (<=), (>), (>=) :: a -> a -> Bool
+--    min, max             :: a -> a -> a
+--
+--    min x y | x <= y    = x
+--            | otherwise = y
+--
+--    max x y | x <= y    = y
+--            | otherwise = x
+--
+--instance Ord Bool where
+--    False < True = True
+--    _     < _    = False
+--
+--    b <= c = (b < c) || (b == c)
+--    b > c = c < b
+--    b >= c = c <= b
+--
+
+-- Derived Instances
+--data Bool = False | True
+--                deriving (Eq, Ord, Show, Read)
+--
+
+
+-- Exercises
+-- 1
+mult :: Nat -> Nat -> Nat
+mult m Zero     = Zero
+mult m (Succ n) = add m (mult m n)
+
+
+-- 2
+occursOrd :: Ord a => a -> Tree a -> Bool
+occursOrd x (Leaf y)     = x == y
+occursOrd x (Node l y r) = case compare x y of
+                            LT -> occursOrd x l
+                            EQ -> True
+                            GT -> occursOrd x r
+
+
+-- 3
+numLeaves :: Tree a -> Int
+numLeaves (Leaf _)     = 1
+numLeaves (Node l _ r) = numLeaves l + 1 + numLeaves r
+
+balanced :: Tree a -> Bool
+balanced (Leaf _)      = True
+balanced (Node l _ r) | (numLeaves l - numLeaves r) > 1  = False
+                      | (numLeaves l - numLeaves r) < -1 = False
+                      | otherwise                        = True
+
+
+-- 4
+halve :: [a] -> ([a], [a])
+halve xs = splitAt (length xs `div` 2) xs
+
+balance :: [a] -> Tree a
+balance [x] = Leaf x
+balance xs  = Node (balance ls) (xs !! (length xs `div` 2)) (balance rs)
+                where
+                    (ls, rs) = halve xs
+
+
+-- 5
+data Expr = Val Int | Add Expr Expr
+
+folde :: (Int -> a) -> (a -> a -> a) -> Expr -> a
+folde f _ (Val a)   = f a
+folde f g (Add a b) = g (folde f g a) (folde f g b)
+
+
+-- 6
+eval :: Expr -> Int
+eval = folde id (+)
+
+size :: Expr -> Int
+size = folde (const 1) (+)
+
+
+-- 7
+-- instance Eq a => Eq (Maybe a) where
+-- Nothing == Nothing == True
+-- Just x  == Just y  = x == y
+-- _       == _       = False
+--
+-- instance Eq a => Eq [a] where
+-- []     == []     = True
+-- (x:xs) == (y:ys) = x == y && xs == ys
+-- _      == _      = False
