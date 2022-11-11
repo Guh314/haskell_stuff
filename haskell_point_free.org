@@ -1,0 +1,360 @@
+#+TITLE: Point Free Basics - Haskell
+#+DESCRIPTION: Point Free Basics in Haskell
+#+AUTHOR: Gustavo Rafael
+
+
+* What is it?
+It is a Style of Programming where the function aguments are ommited example:
+#+begin_src haskell
+-- Non Point Free
+add1 :: Int -> Int
+add1 x = x + 1
+
+-- Point Free
+add1' :: Int -> Int
+add1' = (+) 1
+
+
+-- Non Point Free
+sumOfList :: [Int] -> Int
+sumOfList xs = foldr (+) 0 xs
+
+-- Point Free
+sumOfList' :: [Int] -> Int
+sumOfList' = foldr (+) 0
+#+end_src
+
+* What is it's purpose?
+A Style of Programming that makes the programmer think and communicate the
+transformations in his code in a more Higher-Level, for that it ommits the
+argument of the functions leaving only it's transformations and patterns.
+
+* How to achieve it?
+By using composing functions of other functions, meaning by using combinators
+and using the patterns that emerge from composing functions to make them
+explicit and reduce the number of things on the screen so that only the logic
+and transformations remain.
+
+#+begin_src haskell
+-- A example of what we want to avoid
+totalNumber :: [[Int]] -> [Int]
+totalNumber = sum (map length xs)
+
+-- A Point Free Solution
+totalNumber :: [[Int]] -> [Int]
+totalNumber = sum . map length
+
+-- We still have a problem, that is our function doesn't make it easy to understand what it means by itself.
+-- A little improvement
+totalNumber :: [[Int]] -> [Int]
+totalNumber = aggregate length
+  where
+    aggregate f = sum . map f
+
+-- Now we don't have a point free solution. But it's easier to reason what the program does.
+-- Our objective is to get to:
+totalNumber = aggregate length
+  where aggregate = sum ... map
+
+-- But let's keep this to when we discuss the (...) combinator or 'blackbird'
+#+end_src
+
+** The $ Symbol in Haskell
+Before we start properly with the operators first we must talk about the $
+function in haskell and what it does since we will be using it in our process of
+making our functions point free.
+
+The $ symbol follows the following definition from hackage.haskell.org:
+#+begin_src haskell
+($) :: forall r a (b :: TYPE r). (a -> b) -> a -> b
+#+end_src
+
+Meaning that it is an application operator where (f x) == (f $ x) and have
+right-associative binding allowing for parentheses to be ommited, ex:
+#+begin_src haskell
+f $ g $ h x == f (g (h x))
+#+end_src
+** The Composition Operator -> (.)
+It takes two functions a outside and a inside and a argument and aplies it to
+the inside function first and the result to the outside function.
+#+begin_src haskell
+\x -> outside (inside x)
+\x -> outside $ inside x
+\x -> outside . inside $ x
+      outside . inside
+#+end_src
+
+This process is called eta-reduction.
+
+This pattern can be read as "outside composed with inside".
+
+Some examples:
+#+begin_src haskell
+-- A function that takes the sum of the result of the previous function
+sumOfTotalLengths :: [[Int]] -> Int
+sumOfTotalLengths xs = sum (map length xs)
+
+sumOfTotalLengths' :: [[Int]] -> Int
+sumOfTotalLengths' = sum . map length
+
+
+-- LeetCode Problem 1672: Richest Custommer Wealth
+richest :: [[Int]] -> Int
+richest xs = maximum (map sum xs)
+
+richest :: [[Int]] -> Int
+richest = maximum . map sum
+
+
+-- LeetCode Problem 1832: Pangram
+pangram :: String -> Bool
+pangram xs = (==) 26 (length (nub (map toLower (filter isAscii (filter isAlpha xs)))))
+
+pangram :: String -> Bool
+pangram = (==) 26
+        . length
+        . nub
+        . map toLower
+        . filter isAscii
+        . filter isAlpha
+#+end_src
+
+** The Blackbird Combinator
+The blackbird combinator is a bit more tricky to define it's use, so let's begin
+by showing one example of how he can be used to make the underlying pattern more
+explicit then we can define it. For that let's go back to the totalNumber
+function and it's aggregate function.
+#+begin_src haskell
+-- This is were we had left in our explanation.
+totalNumber :: [[Int]] -> [Int]
+totalNumber = aggregate length
+  where
+    aggregate f = sum . map f
+#+end_src
+Our objective now is to understand were we can go to make it point free, let's
+start by looking at what we already have:
+
+#+begin_src haskell
+aggregate f    = sum . map f
+aggregate f xs = sum . map f $ xs
+aggregate f xs = sum $ map f xs
+aggregate f xs = sum (map f xs)
+#+end_src
+
+This process is called eta-abstraction.
+
+With this we can see the process that we can use to make the first argument that
+we managed ommit explicit, why are going back? To see where we came from, and
+what we got along the way.
+
+Now we can move with eta-reduction and see what else can we remove from the left
+side of our definition:
+
+#+begin_src haskell
+aggregate f = sum . map f
+aggregate f = (.) sum (map f)
+aggregate f = (.) sum $ map f
+aggregate f = (.) sum . map $ f
+aggregate   = \f -> (.) sum . map $ f
+aggregate   = (.) sum . map
+aggregate   = (sum .) . map
+#+end_src
+
+#+begin_src haskell
+-- Looking at our old definition
+totalNumber :: [[Int]] -> [Int]
+totalNumber = aggregate length
+  where
+    agregate f = sum . map f   
+
+-- And our new definition
+totalNumber :: [[Int]] -> [Int]
+totalNumber = aggregate length
+  where
+    aggregate = (sum .) . map
+#+end_src
+
+We can see a problem, the new defition is makes it extremely confusing to
+understand what is going on. Looking more closely we have this:
+
+#+begin_src haskell
+\f g -> (f .) . g
+#+end_src
+
+A function that takes two functions f and g and combines them in a weird way. If
+we eta-abstract it we can better understand what is doing and find a better way
+to express it.
+
+#+begin_src haskell
+\f g     -> (f .) . g
+\f g x   -> (f .) . g $ x
+\f g x   -> (f .) $ g x
+\f g x   -> (f .) (g x)
+\f g x   -> f . g x
+\f g x y -> f . g x $ y
+\f g x y -> f $ g x y
+\f g x y -> f (g x y)
+#+end_src
+
+The structure "\f g x y -> f (g x y)" is a combinator.
+
+A combinator is a lambda expression that refers only to its arguments.
+Ex:
+#+begin_src haskell
+\f g x -> f (g x)          == Composition
+\f g x y -> f (g x y)      == Blackbird
+#+end_src
+
+Not Combinators Ex:
+#+begin_src haskell
+\xs -> foldr (+) 0 xs
+\ls -> sum (map length ls)
+\f xs -> sum (map f xs)
+#+end_src
+
+Back to the combinator, we can define it like this:
+#+begin_src haskell
+f ... g = (f .) . g
+#+end_src
+
+We can eta-reduce the structure "\f g x y -> f (g x y)" to get "(f .) . g" to
+see if anything is wrong but it's not needed, unless you want to go into
+defining the blackbird as a point free solution, in that case, going from the
+start we have:
+
+#+begin_src haskell
+f ... g = \x y -> f (g x y)
+f ... g = \x y -> f $ g x y
+f ... g = \x y -> f . g x $ y
+f ... g = \x   -> f . g x
+f ... g = \x   -> (.) f (g x)
+f ... g = \x   -> (.) f $ g x
+f ... g = \x   -> (.) f . g $ x
+f ... g =      -> (.) f . g
+f ... g =      -> (f .) . g
+  (...) = \f g -> (f .) . g
+  (...) = \f g -> (.) (f .) g
+  (...) = \f g -> (.) (f .) $ g
+  (...) = \f   -> (.) (f .)
+  (...) = \f   -> (.) ((.) f)
+  (...) = \f   -> (.) . (.) $ f
+  (...) =      -> (.) . (.)
+#+end_src
+
+This means that the Blackbird is the composition of composition and composition.
+The name Blackbird comes from the 1985 book To Mock a Mockingbird.
+
+#+begin_src haskell
+-- Now we can look at our initial definition of aggregate and the one that we can create using the Blackbird and compare them
+aggregate f xs = sum (map f xs)
+
+aggregate      = sum ... map
+#+end_src
+Let's look at some examples of the use of this aggregate function that we defined.
+Let's use some functions to take euclidian distance and regular distance.
+
+#+begin_src haskell
+sqr  x = x ** 2
+sqrt x = x ** 0.5
+abs  x = if x>= 0 then x else -x
+
+euclidian = sqrt . aggregate sqr
+regular   =        aggregate abs
+#+end_src
+
+Taking a close look you can that aggregate has a pattern "aggregate an inner
+function and then apply an outer function" where:
+
+#+begin_src haskell
+euclidian = sqrt . aggregate sqr
+regular   =   id . aggregate sqr
+#+end_src
+
+where the nothing in the inner part of the pattern in the regular definition
+equals "id" meaning that we can extract a deeper meaning to what it means
+"distance" in relation to the functions "euclidian" and "regular".
+
+#+begin_src haskell
+distance o i = o . aggregate i
+
+euclidian = distance sqrt sqr
+regular   = distance   id abs
+#+end_src
+
+The definition of distance is not a point free so we can use eta-reduction to
+see what it may look like:
+
+#+begin_src haskell
+distance o i cs = o (aggregate i cs)
+distance o i    = o . aggregate i
+distance o      = (o .) . aggregate
+distance        = (. aggregate) . (.)
+#+end_src
+
+If we use the Blackbird we can use him after the second reduction to get a more
+"cleaner" result:
+
+#+begin_src haskell
+distance o      = o ... aggregate
+distance        = (... aggregate)
+#+end_src
+
+This result is the point where point free stops being useful since we get to a
+point where it hurts the communication of the meaning of the function, since we
+got to a point where the function is defined by half of Blackbird applied to
+aggregate, making the meaning of distance almost impossible to understand.
+
+Lets see some examples of the Blackbird in practice:
+
+#+begin_src haskell
+-- A function that returns the number of matches between two lists.
+
+-- A definition only using the composition operator.
+exactMatches       = ((length . filter id) .) . zipWith (==)
+
+-- A definition using the Blackbird.
+exactMatches       = length . filter id ... zipWith (==)
+
+-- A pointfull definition to illustrate what we are avoiding.
+exactMatches ps qs = length . filter id $ zipWith (==) ps qs 
+
+
+-- A function that returns the number of matching colors between two lists ignoring postion.
+
+-- A definition only using the composition operator.
+colorMatches = (. countColors) . ((sum .) . zipWith min) . countColors
+
+-- This definition is extremely hard to communicate, we are communicating partial applications of combinators
+-- Let's look at the pointfull definition and see if we can find other parameters to help us.
+colorMatchs ps qs = sum $ zipWith min (countColors ps) (countColors qs)
+#+end_src
+
+We can see a pattern with the zipWith function, where it takes a function, two
+transformations two lists and puts them together, meaning
+\f g h x y -> f (g x) (h y) which is a combinator the psi combinator.
+
+** The Psi Combinator -> (on)
+The Psi combinator or (on) in Haskell, in the Data.Function module, has the
+following definition:
+
+#+begin_src haskell
+on :: (b -> b -> c) -> (a -> b) -> a -> a -> c
+#+end_src
+
+Meaning that it takes a binary function (function with two arguments) a unary
+function, two arguments and returs a the result of passing the two arguments to
+the unary function them to the binary function.
+
+#+begin_src haskell
+-- Now we can look at our colorMatchs definition in the previous chapter and look at how we can use the Psi combinator to simplify it's definition
+{- We can take the expression:
+     zipWith min (countColors ps) (countColors qs)
+   and turn it into
+     zipWith min `on` countColors
+-}
+-- Substituing it on our point full solution we have:
+colorMatches ps qs = sum $ (zipWith min `on` colorCount) ps qs
+
+-- Now our definition applying a Blackbird to clean the rest is:
+colorMatchs = sum ... zipWith min `on` countColors
+#+end_src

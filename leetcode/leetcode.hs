@@ -1,12 +1,12 @@
 import Data.List
+import Data.Char
 
 -- Problem 1832: Panagram
-rmdups :: Eq a => [a] -> [a]
-rmdups []     = []
-rmdups (x:xs) = x : filter (/=x) (rmdups xs)
+pangram :: String -> Bool
+pangram = (==) 26 . length . nub
 
-panagram :: String -> Bool
-panagram str = length (rmdups str) == 26
+pangram' :: String -> Bool
+pangram' text = all (`elem` map toUpper text) ['A'..'Z']
 
 
 -- Problem 1480: Running Sum of 1dArray
